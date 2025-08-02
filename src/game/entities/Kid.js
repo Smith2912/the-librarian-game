@@ -13,6 +13,7 @@ export class Kid extends Entity {
     // Movement properties - scale with aggression
     this.speed = aggressionLevel === 1 ? 70 : aggressionLevel === 2 ? 80 : 90;
     this.fleeSpeed = aggressionLevel === 1 ? 100 : aggressionLevel === 2 ? 110 : 120;
+    this.speedMultiplier = 1.0; // For chaos-based speed modifications
     this.direction = Math.random() * Math.PI * 2; // Random initial direction
     this.directionChangeTimer = 0;
     this.directionChangeInterval = 2; // Change direction every 2 seconds
@@ -786,6 +787,9 @@ export class Kid extends Entity {
       currentSpeed = this.fleeSpeed;
     }
     
+    // Apply chaos-based speed multiplier
+    currentSpeed *= this.speedMultiplier;
+    
     // Apply slow effect
     if (this.slowed) {
       currentSpeed *= this.slowFactor;
@@ -1083,14 +1087,22 @@ export class Kid extends Entity {
   }
   
   playLaughingSound() {
-    // Only play if we haven't already played it for this flee session
     if (!this.hasPlayedLaughSound) {
-      // Select laugh sound based on sprite type
-      const laughFile = `/kid_laughing_${this.spriteType}.mp3`;
-      const laughSound = new Audio(laughFile);
-      laughSound.volume = 0.5;
-      laughSound.play().catch(e => console.log('Kid laugh sound play failed:', e));
+      const laughSounds = ['kid_laughing_1', 'kid_laughing_2', 'kid_laughing_3'];
+      const randomSound = laughSounds[Math.floor(Math.random() * laughSounds.length)];
+      const audio = new Audio(`/${randomSound}.mp3`);
+      audio.volume = 0.4;
+      audio.play().catch(e => console.log('Laugh sound play failed:', e));
       this.hasPlayedLaughSound = true;
+    }
+  }
+  
+  switchToStealing() {
+    // Only switch if not already stealing and not stunned
+    if (this.state !== 'stealing' && !this.stunned) {
+      this.state = 'stealing';
+      this.target = null; // Will be set in updateStealing
+      console.log(`[KID BEHAVIOR] Kid switched to stealing state (aggression: ${this.aggressionLevel})`);
     }
   }
 }

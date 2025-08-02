@@ -124,9 +124,15 @@ export class Player extends Entity {
     // Apply movement if no collision
     if (canMoveX) {
       this.x = newX;
+    } else {
+      // Reset velocity if blocked to prevent getting stuck
+      this.vx = 0;
     }
     if (canMoveY) {
       this.y = newY;
+    } else {
+      // Reset velocity if blocked to prevent getting stuck
+      this.vy = 0;
     }
     
     // Keep within world bounds

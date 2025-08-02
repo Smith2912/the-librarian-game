@@ -88,41 +88,98 @@ export class SkillSystem {
     const skill = this.skills.get(skillId);
     if (!skill) return false;
     
-    // Set cooldown
-    skill.currentCooldown = skill.cooldown;
+    // Get chaos-based bonuses
+    const chaosRatio = this.game.gameData.chaosLevel / this.game.gameData.maxChaos;
+    const chaosBonus = this.calculateChaosBonus(chaosRatio);
     
-    // Execute skill
+    // Set cooldown (reduced by chaos bonus)
+    skill.currentCooldown = skill.cooldown * (1 - chaosBonus.cooldownReduction);
+    
+    // Execute skill with chaos bonuses
     switch (skillId) {
       case 'shushWave':
-        this.executeShushWave(player, targetX, targetY, skill);
+        this.executeShushWave(player, targetX, targetY, skill, chaosBonus);
         break;
       case 'bookmarkBoomerang':
-        this.executeBookmarkBoomerang(player, targetX, targetY, skill);
+        this.executeBookmarkBoomerang(player, targetX, targetY, skill, chaosBonus);
         break;
       case 'dustCloud':
-        this.executeDustCloud(player, targetX, targetY, skill);
+        this.executeDustCloud(player, targetX, targetY, skill, chaosBonus);
         break;
     }
+    
+    // Award XP for skill usage
+    this.awardSkillXP(skillId, chaosBonus);
     
     return true;
   }
   
-  executeShushWave(player, targetX, targetY, skill) {
+  calculateChaosBonus(chaosRatio) {
+    // High chaos makes skills more powerful
+    let bonus = {
+      range: 1.0,
+      duration: 1.0,
+      effectiveness: 1.0,
+      cooldownReduction: 0.0
+    };
+    
+    if (chaosRatio > 0.8) {
+      // High chaos: significant bonuses
+      bonus.range = 1.3;
+      bonus.duration = 1.4;
+      bonus.effectiveness = 1.5;
+      bonus.cooldownReduction = 0.2;
+    } else if (chaosRatio > 0.6) {
+      // Medium chaos: moderate bonuses
+      bonus.range = 1.15;
+      bonus.duration = 1.2;
+      bonus.effectiveness = 1.25;
+      bonus.cooldownReduction = 0.1;
+    } else if (chaosRatio > 0.4) {
+      // Low chaos: small bonuses
+      bonus.range = 1.05;
+      bonus.duration = 1.1;
+      bonus.effectiveness = 1.1;
+      bonus.cooldownReduction = 0.05;
+    }
+    
+    return bonus;
+  }
+  
+  awardSkillXP(skillId, chaosBonus) {
+    // Award XP for using skills, more when chaos is high
+    const baseXP = 5;
+    const chaosMultiplier = 1 + (chaosBonus.effectiveness - 1) * 0.5;
+    const xpGained = Math.round(baseXP * chaosMultiplier);
+    
+    // Award XP to the game
+    if (this.game.stateManager.currentState && this.game.stateManager.currentState.awardXP) {
+      this.game.stateManager.currentState.awardXP(xpGained);
+    }
+  }
+  
+  executeShushWave(player, targetX, targetY, skill, chaosBonus) {
     const playerCenterX = player.getCenterX();
     const playerCenterY = player.getCenterY();
+    
+    // Apply chaos bonuses
+    const enhancedRange = skill.range * chaosBonus.range;
+    const enhancedAngle = skill.angle * chaosBonus.range; // Wider cone
+    const enhancedKnockback = skill.knockbackForce * chaosBonus.effectiveness;
+    const enhancedStunDuration = skill.stunDuration * chaosBonus.duration;
     
     // Calculate direction to target
     const dx = targetX - playerCenterX;
     const dy = targetY - playerCenterY;
     const angle = Math.atan2(dy, dx);
     
-    // Create cone effect
+    // Create cone effect with enhanced particles
     const coneParticles = [];
-    const particleCount = 20;
+    const particleCount = Math.floor(20 * chaosBonus.effectiveness);
     
     for (let i = 0; i < particleCount; i++) {
-      const particleAngle = angle + (Math.random() - 0.5) * skill.angle;
-      const distance = Math.random() * skill.range;
+      const particleAngle = angle + (Math.random() - 0.5) * enhancedAngle;
+      const distance = Math.random() * enhancedRange;
       const speed = 100 + Math.random() * 100;
       
       coneParticles.push({
@@ -130,7 +187,7 @@ export class SkillSystem {
         y: playerCenterY,
         vx: Math.cos(particleAngle) * speed,
         vy: Math.sin(particleAngle) * speed,
-        lifetime: 0.8,
+        lifetime: 0.8 * chaosBonus.duration,
         age: 0,
         size: 3 + Math.random() * 3
       });
@@ -145,32 +202,35 @@ export class SkillSystem {
         const kidCenterX = kid.getCenterX();
         const kidCenterY = kid.getCenterY();
         
-        // Check distance
+        // Check distance with enhanced range
         const distance = Math.sqrt(
           Math.pow(kidCenterX - playerCenterX, 2) +
           Math.pow(kidCenterY - playerCenterY, 2)
         );
         
-        if (distance <= skill.range) {
-          // Check if kid is in cone
+        if (distance <= enhancedRange) {
+          // Check if kid is in cone with enhanced angle
           const kidAngle = Math.atan2(kidCenterY - playerCenterY, kidCenterX - playerCenterX);
           const angleDiff = Math.abs(kidAngle - angle);
           const normalizedAngleDiff = Math.min(angleDiff, Math.PI * 2 - angleDiff);
           
-          if (normalizedAngleDiff <= skill.angle / 2) {
-            // Apply knockback
+          if (normalizedAngleDiff <= enhancedAngle / 2) {
+            // Apply enhanced knockback
             const knockbackAngle = Math.atan2(kidCenterY - playerCenterY, kidCenterX - playerCenterX);
-            kid.vx = Math.cos(knockbackAngle) * skill.knockbackForce;
-            kid.vy = Math.sin(knockbackAngle) * skill.knockbackForce;
+            kid.vx = Math.cos(knockbackAngle) * enhancedKnockback;
+            kid.vy = Math.sin(knockbackAngle) * enhancedKnockback;
             
-            // Apply stun
+            // Apply enhanced stun
             kid.stunned = true;
-            kid.stunTimer = skill.stunDuration;
+            kid.stunTimer = enhancedStunDuration;
             
             // Drop carried book if any
             if (kid.carriedBook) {
               kid.dropBook();
             }
+            
+            // Award extra XP for hitting kids
+            this.awardSkillXP('shushWave', chaosBonus);
           }
         }
       }
@@ -180,18 +240,27 @@ export class SkillSystem {
     this.playSkillSound('shush');
   }
   
-  executeBookmarkBoomerang(player, targetX, targetY, skill) {
+  executeBookmarkBoomerang(player, targetX, targetY, skill, chaosBonus) {
     const playerCenterX = player.getCenterX();
     const playerCenterY = player.getCenterY();
     
-    // Create boomerang projectile
+    // Apply chaos bonuses to skill
+    const enhancedSkill = {
+      ...skill,
+      range: skill.range * chaosBonus.range,
+      speed: skill.speed * chaosBonus.effectiveness,
+      returnSpeed: skill.returnSpeed * chaosBonus.effectiveness,
+      silenceDuration: skill.silenceDuration * chaosBonus.duration
+    };
+    
+    // Create boomerang projectile with enhanced stats
     const projectile = new BookmarkBoomerang(
       this.game,
       playerCenterX,
       playerCenterY,
       targetX,
       targetY,
-      skill,
+      enhancedSkill,
       player
     );
     
@@ -201,53 +270,67 @@ export class SkillSystem {
     this.playSkillSound('bookmark');
   }
   
-  executeDustCloud(player, targetX, targetY, skill) {
-    // Create dust cloud effect at target location
-    const dustParticles = [];
-    const particleCount = 30;
+  executeDustCloud(player, targetX, targetY, skill, chaosBonus) {
+    const playerCenterX = player.getCenterX();
+    const playerCenterY = player.getCenterY();
+    
+    // Apply chaos bonuses
+    const enhancedRange = skill.range * chaosBonus.range;
+    const enhancedDuration = skill.duration * chaosBonus.duration;
+    const enhancedSlowFactor = Math.max(0.1, skill.slowFactor / chaosBonus.effectiveness); // Better slow
+    
+    // Create dust cloud effect
+    const cloudParticles = [];
+    const particleCount = Math.floor(30 * chaosBonus.effectiveness);
     
     for (let i = 0; i < particleCount; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * skill.range;
+      const distance = Math.random() * enhancedRange;
       const speed = 20 + Math.random() * 30;
       
-      dustParticles.push({
-        x: targetX + Math.cos(angle) * distance,
-        y: targetY + Math.sin(angle) * distance,
+      cloudParticles.push({
+        x: playerCenterX + Math.cos(angle) * distance,
+        y: playerCenterY + Math.sin(angle) * distance,
         vx: (Math.random() - 0.5) * speed,
         vy: (Math.random() - 0.5) * speed,
-        lifetime: skill.duration,
+        lifetime: enhancedDuration,
         age: 0,
-        size: 2 + Math.random() * 4,
-        type: 'dust'
+        size: 2 + Math.random() * 4
       });
     }
     
-    this.particles.push(...dustParticles);
+    this.particles.push(...cloudParticles);
     
-    // Create slow zone effect
+    // Create slow effect area
     this.activeEffects.push({
-      type: 'slowZone',
-      x: targetX,
-      y: targetY,
-      radius: skill.range,
-      duration: skill.duration,
-      slowFactor: skill.slowFactor
+      type: 'dustCloud',
+      x: playerCenterX,
+      y: playerCenterY,
+      range: enhancedRange,
+      duration: enhancedDuration,
+      slowFactor: enhancedSlowFactor
     });
     
-    // Apply slow to kids in range
+    // Affect kids in range
     const playingState = this.game.stateManager.getState('playing');
     if (playingState) {
       for (const kid of playingState.kids) {
+        const kidCenterX = kid.getCenterX();
+        const kidCenterY = kid.getCenterY();
+        
         const distance = Math.sqrt(
-          Math.pow(kid.getCenterX() - targetX, 2) +
-          Math.pow(kid.getCenterY() - targetY, 2)
+          Math.pow(kidCenterX - playerCenterX, 2) +
+          Math.pow(kidCenterY - playerCenterY, 2)
         );
         
-        if (distance <= skill.range) {
+        if (distance <= enhancedRange) {
+          // Apply slow effect
           kid.slowed = true;
-          kid.slowTimer = skill.duration;
-          kid.slowFactor = skill.slowFactor;
+          kid.slowTimer = enhancedDuration;
+          kid.slowFactor = enhancedSlowFactor;
+          
+          // Award XP for affecting kids
+          this.awardSkillXP('dustCloud', chaosBonus);
         }
       }
     }

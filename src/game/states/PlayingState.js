@@ -309,41 +309,85 @@ export class PlayingState extends State {
     }).length;
     const totalChaosBooks = booksOnFloor + booksHeldByKids;
     
-    // Sliding chaos rate based on game progression
+    // Dynamic chaos rate based on game progression and current chaos level
     let chaosRate = 0;
     if (totalChaosBooks > 0) {
       // Calculate game time in minutes
       const minutes = gameData.elapsedTime / 60;
       
-      // Determine chaos rate per book based on time
-      let chaosPerBook;
-      if (minutes < 3) {
-        chaosPerBook = 0.05; // 0-3 minutes: 0.05% per book per second
-      } else if (minutes < 5) {
-        chaosPerBook = 0.03; // 3-5 minutes: 0.03% per book per second
-      } else {
-        chaosPerBook = 0.01; // 5+ minutes: 0.01% per book per second
+      // Base chaos rate per book - increases with time
+      let baseChaosPerBook = 0.02; // Base rate
+      
+      // Time-based scaling - chaos gets more intense over time
+      if (minutes > 10) {
+        baseChaosPerBook = 0.04; // 10+ minutes: more intense
+      } else if (minutes > 5) {
+        baseChaosPerBook = 0.03; // 5-10 minutes: moderate intensity
       }
       
-      chaosRate = totalChaosBooks * chaosPerBook;
+      // Chaos level multiplier - higher chaos makes it worse
+      const chaosMultiplier = 1 + (gameData.chaosLevel / gameData.maxChaos) * 0.5;
+      
+      // Number of kids multiplier - more kids = more chaos
+      const kidMultiplier = 1 + (this.kids.length / 10) * 0.3;
+      
+      chaosRate = totalChaosBooks * baseChaosPerBook * chaosMultiplier * kidMultiplier;
       
       // Apply chaos dampening from upgrades
       const chaosDampening = this.player?.stats?.chaosDampening || 0;
-      const chaosMultiplier = 1 - (chaosDampening / 100);
-      gameData.chaosLevel += chaosRate * deltaTime * chaosMultiplier;
+      const dampeningMultiplier = Math.max(0.1, 1 - (chaosDampening / 100));
+      gameData.chaosLevel += chaosRate * deltaTime * dampeningMultiplier;
     }
     
-    // Passive chaos decay when low (helps recovery)
+    // Recovery mechanics
     if (gameData.chaosLevel > 0) {
       if (totalChaosBooks === 0) {
-        // Slow decay when no books are out
+        // Fast recovery when no books are out
+        gameData.chaosLevel -= 0.5 * deltaTime;
+      } else if (totalChaosBooks <= 2) {
+        // Slow recovery when very few books are out
         gameData.chaosLevel -= 0.1 * deltaTime;
       }
-      // Removed passive decay when under 50% - player must actively manage chaos
+      // No recovery when many books are out - player must actively manage
     }
     
     // Clamp chaos level
     gameData.chaosLevel = Math.max(0, Math.min(gameData.maxChaos, gameData.chaosLevel));
+    
+    // Chaos level effects
+    this.applyChaosEffects(deltaTime);
+  }
+  
+  applyChaosEffects(deltaTime) {
+    const gameData = this.game.gameData;
+    const chaosRatio = gameData.chaosLevel / gameData.maxChaos;
+    
+    // Visual effects are handled in renderChaosVignette
+    
+    // Gameplay effects based on chaos level
+    if (chaosRatio > 0.8) {
+      // High chaos: Kids become more aggressive
+      for (const kid of this.kids) {
+        if (kid.state === 'wandering') {
+          // Increase chance of switching to stealing
+          if (Math.random() < 0.1 * deltaTime) {
+            kid.switchToStealing();
+          }
+        }
+      }
+    }
+    
+    if (chaosRatio > 0.6) {
+      // Medium-high chaos: Slightly faster kid movement
+      for (const kid of this.kids) {
+        kid.speedMultiplier = 1.1;
+      }
+    } else {
+      // Reset kid speed to normal
+      for (const kid of this.kids) {
+        kid.speedMultiplier = 1.0;
+      }
+    }
   }
   
   render(renderer, interpolation) {
@@ -713,6 +757,7 @@ export class PlayingState extends State {
   updateKidSpawning(deltaTime) {
     // Calculate current game time in minutes
     const minutes = this.game.gameData.elapsedTime / 60;
+    const chaosRatio = this.game.gameData.chaosLevel / this.game.gameData.maxChaos;
     
     // Determine max kids based on wave progression
     let newMaxKids;
@@ -728,6 +773,13 @@ export class PlayingState extends State {
       // After 10 minutes: increase by 2 every minute
       const additionalMinutes = Math.floor(minutes - 10);
       newMaxKids = 10 + (additionalMinutes * 2);
+    }
+    
+    // Chaos-based bonus kids - high chaos can spawn extra kids
+    if (chaosRatio > 0.8) {
+      newMaxKids += 2; // High chaos: +2 extra kids
+    } else if (chaosRatio > 0.6) {
+      newMaxKids += 1; // Medium chaos: +1 extra kid
     }
     
     // Check if max kids increased
@@ -759,22 +811,40 @@ export class PlayingState extends State {
       return;
     }
     
+    // Dynamic spawn interval based on chaos and time
+    let baseSpawnInterval = 15; // Base 15 seconds
+    
+    // Time-based acceleration
+    if (minutes > 15) {
+      baseSpawnInterval = 8; // Very fast spawning
+    } else if (minutes > 10) {
+      baseSpawnInterval = 10; // Fast spawning
+    } else if (minutes > 5) {
+      baseSpawnInterval = 12; // Moderate spawning
+    }
+    
+    // Chaos-based acceleration - high chaos spawns kids faster
+    if (chaosRatio > 0.8) {
+      baseSpawnInterval *= 0.6; // 40% faster
+    } else if (chaosRatio > 0.6) {
+      baseSpawnInterval *= 0.8; // 20% faster
+    }
+    
     // Update spawn timer
     this.kidSpawnTimer -= deltaTime;
     
     if (this.kidSpawnTimer <= 0) {
-      // Determine aggression level based on time
+      // Determine aggression level based on time and chaos
       let aggressionLevel = 1; // Easy by default
-      let spawnInterval = 15; // Always 15 seconds
       
-      if (minutes >= 15) {
-        // After 15 minutes: more aggressive kids
+      if (minutes >= 15 || chaosRatio > 0.8) {
+        // Very aggressive: high time OR high chaos
         aggressionLevel = 3;
-      } else if (minutes >= 10) {
-        // 10-15 minutes: aggressive kids
+      } else if (minutes >= 10 || chaosRatio > 0.6) {
+        // Aggressive: medium time OR medium chaos
         aggressionLevel = 3;
       } else if (minutes >= 5) {
-        // 5-10 minutes: normal kids
+        // Normal: early game
         aggressionLevel = 2;
       }
       
@@ -784,10 +854,10 @@ export class PlayingState extends State {
       this.kids.push(kid);
       
       // Reset timer for next spawn
-      this.kidSpawnTimer = spawnInterval;
-      this.kidSpawnInterval = spawnInterval;
+      this.kidSpawnTimer = baseSpawnInterval;
+      this.kidSpawnInterval = baseSpawnInterval;
       
-      console.log(`[KID SPAWNING] Spawned kid #${this.kids.length}/${this.maxKids} (aggression: ${aggressionLevel}) - Next spawn in ${spawnInterval}s`);
+      console.log(`[KID SPAWNING] Spawned kid #${this.kids.length}/${this.maxKids} (aggression: ${aggressionLevel}, chaos: ${Math.round(chaosRatio * 100)}%) - Next spawn in ${Math.round(baseSpawnInterval)}s`);
     }
   }
   

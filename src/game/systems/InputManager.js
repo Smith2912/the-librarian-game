@@ -203,10 +203,21 @@ export class InputManager {
     // This helps prevent keys from getting stuck due to focus issues
     const currentTime = Date.now();
     for (const [key, timestamp] of this.keys.entries()) {
-      if (typeof timestamp === 'number' && currentTime - timestamp > 5000) {
-        // Key has been held for more than 5 seconds, likely stuck
+      if (typeof timestamp === 'number' && currentTime - timestamp > 3000) {
+        // Key has been held for more than 3 seconds, likely stuck
         console.log(`Clearing potentially stuck key: ${key}`);
         this.keys.delete(key);
+        this.frameKeyReleases.add(key); // Mark as released
+      }
+    }
+    
+    // Special handling for sprint key - if it's stuck, force clear it
+    if (this.keys.has('Shift')) {
+      const shiftTimestamp = this.keys.get('Shift');
+      if (typeof shiftTimestamp === 'number' && currentTime - shiftTimestamp > 2000) {
+        console.log('Clearing stuck sprint key');
+        this.keys.delete('Shift');
+        this.frameKeyReleases.add('Shift');
       }
     }
   }
