@@ -244,27 +244,36 @@ export class EventSystem {
   }
   
   showEventNotification(title, description) {
-    // Create notification element
+    // Sanitize inputs to prevent XSS
+    const sanitizedTitle = this.sanitizeText(title);
+    const sanitizedDescription = this.sanitizeText(description);
+    
     const notification = document.createElement('div');
     notification.style.cssText = `
       position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
+      top: 20px;
+      right: 20px;
       background: rgba(0, 0, 0, 0.9);
       color: white;
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-      z-index: 1000;
+      padding: 15px;
+      border-radius: 8px;
+      z-index: 10000;
       font-family: Arial, sans-serif;
       max-width: 400px;
+      border-left: 4px solid #ff6b6b;
     `;
     
-    notification.innerHTML = `
-      <h2 style="color: #ff6b6b; margin: 0 0 10px 0;">${title}</h2>
-      <p style="margin: 0;">${description}</p>
-    `;
+    // Use textContent instead of innerHTML to prevent XSS
+    const titleElement = document.createElement('h2');
+    titleElement.textContent = sanitizedTitle;
+    titleElement.style.cssText = 'color: #ff6b6b; margin: 0 0 10px 0; font-size: 16px;';
+    
+    const descriptionElement = document.createElement('p');
+    descriptionElement.textContent = sanitizedDescription;
+    descriptionElement.style.cssText = 'margin: 0; font-size: 14px;';
+    
+    notification.appendChild(titleElement);
+    notification.appendChild(descriptionElement);
     
     document.body.appendChild(notification);
     
@@ -274,6 +283,15 @@ export class EventSystem {
         notification.parentNode.removeChild(notification);
       }
     }, 3000);
+  }
+  
+  // Sanitize text to prevent XSS
+  sanitizeText(text) {
+    if (typeof text !== 'string') {
+      return '';
+    }
+    // Remove any HTML tags and limit length
+    return text.replace(/<[^>]*>/g, '').substring(0, 200);
   }
   
   playEventSound(eventType) {

@@ -1,47 +1,23 @@
 export class InputManager {
   constructor(canvas) {
     this.canvas = canvas;
-    
-    // Keyboard state
     this.keys = new Map();
-    this.previousKeys = new Map();
-    
-    // Key press events that happened this frame
-    this.frameKeyPresses = new Set();
     this.frameKeyReleases = new Set();
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.mouseDown = false;
+    this.touchActive = false;
+    this.lastFocusTime = Date.now();
     
-    // Mouse state
-    this.mouse = {
-      x: 0,
-      y: 0,
-      buttons: new Map(),
-      previousButtons: new Map(),
-      wheel: 0
-    };
-    
-    // Touch state (for mobile support)
-    this.touches = new Map();
-    
-    // Input mappings
-    this.actionMappings = new Map([
-      ['moveUp', ['w', 'W', 'ArrowUp']],
-      ['moveDown', ['s', 'S', 'ArrowDown']],
-      ['moveLeft', ['a', 'A', 'ArrowLeft']],
-      ['moveRight', ['d', 'D', 'ArrowRight']],
-      ['sprint', ['Shift']],
-      ['pause', ['p', 'P', 'Escape']],
-      ['interact', [' ', 'e', 'E']]
-    ]);
-    
-    // Make canvas focusable
-    this.canvas.tabIndex = 1;
+    // Only log in development mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Setting up input event listeners...');
+    }
     
     this.setupEventListeners();
   }
   
   setupEventListeners() {
-    console.log('Setting up input event listeners...');
-    
     // Focus canvas
     this.canvas.focus();
     
@@ -92,38 +68,31 @@ export class InputManager {
   }
   
   handleKeyDown(event) {
-    // Prevent default for game keys
-    if (this.isGameKey(event.key)) {
+    const key = event.key;
+    
+    // Prevent default behavior for game keys
+    if (this.isGameKey(key)) {
       event.preventDefault();
     }
     
-    // If this key wasn't already down, it's a new press
-    if (!this.keys.has(event.key)) {
-      this.frameKeyPresses.add(event.key);
-      console.log('New key press:', event.key);
+    // Only log in development mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log('New key press:', key);
     }
     
-    // Store key with timestamp
-    this.keys.set(event.key, Date.now());
-    
-    // Ensure canvas has focus when any key is pressed
-    this.ensureFocus();
+    this.keys.set(key, Date.now());
   }
   
   handleKeyUp(event) {
-    // Always mark as released if it was ever pressed
-    if (this.keys.has(event.key)) {
-      this.frameKeyReleases.add(event.key);
+    const key = event.key;
+    
+    // Prevent default behavior for game keys
+    if (this.isGameKey(key)) {
+      event.preventDefault();
     }
     
-    // Remove from keys map
-    this.keys.delete(event.key);
-    
-    // Also remove from frameKeyPresses to prevent stuck keys
-    this.frameKeyPresses.delete(event.key);
-    
-    // Ensure canvas maintains focus
-    this.ensureFocus();
+    this.keys.delete(key);
+    this.frameKeyReleases.add(key);
   }
   
   handleMouseDown(event) {
@@ -184,28 +153,17 @@ export class InputManager {
   }
   
   update() {
-    // Store previous frame's input state
-    this.previousKeys = new Map(this.keys);
-    this.mouse.previousButtons = new Map(this.mouse.buttons);
-    
-    // Clear frame events after they've been processed
-    // This happens AFTER the game has had a chance to check them
-    this.frameKeyPresses.clear();
+    // Clear frame-specific data
     this.frameKeyReleases.clear();
     
-    // Reset wheel delta
-    this.mouse.wheel = 0;
-    
-    // Ensure canvas has focus for better input handling
-    this.ensureFocus();
-    
-    // Additional check for stuck keys - if a key has been held for too long without updates
-    // This helps prevent keys from getting stuck due to focus issues
+    // Check for stuck keys and clear them
     const currentTime = Date.now();
     for (const [key, timestamp] of this.keys.entries()) {
-      if (typeof timestamp === 'number' && currentTime - timestamp > 3000) {
-        // Key has been held for more than 3 seconds, likely stuck
-        console.log(`Clearing potentially stuck key: ${key}`);
+      if (typeof timestamp === 'number' && currentTime - timestamp > 3000) { // Reduced from 5000
+        // Only log in development mode
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Clearing potentially stuck key: ${key}`);
+        }
         this.keys.delete(key);
         this.frameKeyReleases.add(key); // Mark as released
       }
@@ -214,8 +172,11 @@ export class InputManager {
     // Special handling for sprint key - if it's stuck, force clear it
     if (this.keys.has('Shift')) {
       const shiftTimestamp = this.keys.get('Shift');
-      if (typeof shiftTimestamp === 'number' && currentTime - shiftTimestamp > 2000) {
-        console.log('Clearing stuck sprint key');
+      if (typeof shiftTimestamp === 'number' && currentTime - shiftTimestamp > 2000) { // Specific for Shift
+        // Only log in development mode
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Clearing stuck sprint key');
+        }
         this.keys.delete('Shift');
         this.frameKeyReleases.add('Shift');
       }
@@ -292,15 +253,15 @@ export class InputManager {
   }
   
   clearAllInputs() {
-    console.log('Clearing all input state');
+    // Only log in development mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Clearing all input state');
+    }
+    
     this.keys.clear();
-    this.previousKeys.clear();
-    this.frameKeyPresses.clear();
     this.frameKeyReleases.clear();
-    this.mouse.buttons.clear();
-    this.mouse.previousButtons.clear();
-    this.touches.clear();
-    this.mouse.wheel = 0;
+    this.mouseDown = false;
+    this.touchActive = false;
   }
   
   // Safely clear just the frame events (for state transitions)

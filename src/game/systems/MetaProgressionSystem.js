@@ -1,6 +1,10 @@
+import { SecurityUtils } from '../../security.js';
+
 export class MetaProgressionSystem {
   constructor(game) {
     this.game = game;
+    
+    // Initialize with defaults
     this.currency = 0;
     this.permanentUpgrades = {};
     this.unlockedLibrarians = ['default'];
@@ -86,7 +90,12 @@ export class MetaProgressionSystem {
     };
     
     try {
-      localStorage.setItem('librarySurvivorsData', JSON.stringify(data));
+      // Validate data before saving
+      if (this.validateSaveData(data)) {
+        localStorage.setItem('librarySurvivorsData', JSON.stringify(data));
+      } else {
+        console.error('Invalid data structure detected, not saving');
+      }
     } catch (e) {
       console.error('Failed to save game data:', e);
     }
@@ -97,15 +106,59 @@ export class MetaProgressionSystem {
       const savedData = localStorage.getItem('librarySurvivorsData');
       if (savedData) {
         const data = JSON.parse(savedData);
-        this.currency = data.currency || 0;
-        this.permanentUpgrades = data.permanentUpgrades || {};
-        this.unlockedLibrarians = data.unlockedLibrarians || ['default'];
-        this.currentLibrarian = data.currentLibrarian || 'default';
-        this.highScores = data.highScores || [];
+        
+        // Use SecurityUtils for validation
+        if (SecurityUtils.validateLocalStorageData(data)) {
+          this.currency = SecurityUtils.sanitizeNumber(data.currency, 0, 999999);
+          this.permanentUpgrades = SecurityUtils.sanitizeObject(data.permanentUpgrades) || {};
+          this.unlockedLibrarians = SecurityUtils.sanitizeArray(data.unlockedLibrarians) || ['default'];
+          this.currentLibrarian = SecurityUtils.sanitizeString(data.currentLibrarian) || 'default';
+          this.highScores = SecurityUtils.sanitizeHighScores(data.highScores) || [];
+        } else {
+          console.error('Invalid saved data structure, using defaults');
+          this.resetData();
+        }
       }
     } catch (e) {
       console.error('Failed to load game data:', e);
+      this.resetData();
     }
+  }
+  
+  // Validate save data structure
+  validateSaveData(data) {
+    return SecurityUtils.validateLocalStorageData(data);
+  }
+  
+  // Sanitize input values
+  sanitizeNumber(value) {
+    return SecurityUtils.sanitizeNumber(value, 0, 999999);
+  }
+  
+  sanitizeString(value) {
+    return SecurityUtils.sanitizeText(value, 50);
+  }
+  
+  sanitizeObject(value) {
+    return typeof value === 'object' && value !== null ? value : {};
+  }
+  
+  sanitizeArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+  
+  sanitizeHighScores(scores) {
+    if (!Array.isArray(scores)) return [];
+    
+    return scores
+      .filter(score => score && typeof score === 'object')
+      .map(score => ({
+        score: SecurityUtils.sanitizeNumber(score.score, 0, 999999999),
+        time: SecurityUtils.sanitizeNumber(score.time, 0, 999999),
+        date: SecurityUtils.sanitizeText(score.date, 50),
+        booksCollected: SecurityUtils.sanitizeNumber(score.booksCollected, 0, 999999)
+      }))
+      .slice(0, 10); // Limit to top 10 scores
   }
   
   // Reset all data

@@ -7,8 +7,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Create game instance
   const game = new Game('game-canvas');
   
-  // Make game instance globally available for debugging
-  window.game = game;
+  // Remove global exposure for security - only expose in development
+  if (process.env.NODE_ENV === 'development') {
+    window.game = game;
+  }
   
   try {
     // Initialize and start the game

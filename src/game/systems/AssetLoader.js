@@ -89,8 +89,35 @@ export class AssetLoader {
   
   async loadJSON(name, path) {
     try {
-      const response = await fetch(path);
+      // Validate and sanitize the path
+      const sanitizedPath = this.sanitizeAssetPath(path);
+      if (!sanitizedPath) {
+        console.error(`Invalid asset path: ${path}`);
+        this.loadedAssets++;
+        this.updateProgress();
+        return null;
+      }
+      
+      const response = await fetch(sanitizedPath);
+      
+      // Check if response is ok
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Invalid content type for JSON asset');
+      }
+      
       const data = await response.json();
+      
+      // Validate JSON structure
+      if (!this.validateJSONAsset(data)) {
+        throw new Error('Invalid JSON asset structure');
+      }
+      
       this.assets.set(name, data);
       this.loadedAssets++;
       this.updateProgress();
@@ -101,6 +128,39 @@ export class AssetLoader {
       this.updateProgress();
       return null;
     }
+  }
+  
+  // Sanitize asset path to prevent path traversal attacks
+  sanitizeAssetPath(path) {
+    if (typeof path !== 'string') return null;
+    
+    // Remove any path traversal attempts
+    const sanitized = path.replace(/\.\./g, '').replace(/\/\//g, '/');
+    
+    // Only allow paths starting with / or ./
+    if (!sanitized.startsWith('/') && !sanitized.startsWith('./')) {
+      return null;
+    }
+    
+    // Limit path length
+    if (sanitized.length > 200) {
+      return null;
+    }
+    
+    // Only allow specific file extensions
+    const allowedExtensions = ['.json', '.png', '.jpg', '.jpeg', '.gif', '.mp3', '.wav', '.ogg'];
+    const hasValidExtension = allowedExtensions.some(ext => sanitized.toLowerCase().endsWith(ext));
+    
+    return hasValidExtension ? sanitized : null;
+  }
+  
+  // Validate JSON asset structure
+  validateJSONAsset(data) {
+    if (!data || typeof data !== 'object') return false;
+    
+    // Add specific validation based on expected JSON structure
+    // This is a basic validation - expand based on your JSON schemas
+    return true;
   }
   
   updateProgress() {

@@ -2,74 +2,44 @@ import { Entity } from './Entity.js';
 
 export class Kid extends Entity {
   constructor(game, x, y, aggressionLevel = 1) {
-    super(x, y, 32, 40); // Slightly larger for better visibility
-    this.game = game;
-    this.aggressionLevel = aggressionLevel; // 1 = easy, 2 = normal, 3 = aggressive
+    super(x, y, 24, 36);
     
-    // Randomly select sprite type (1, 2, or 3)
-    this.spriteType = Math.floor(Math.random() * 3) + 1;
-    console.log(`[KID SPAWN] Created kid with sprite type: ${this.spriteType}`);
-    
-    // Movement properties - scale with aggression
-    this.speed = aggressionLevel === 1 ? 70 : aggressionLevel === 2 ? 80 : 90;
-    this.fleeSpeed = aggressionLevel === 1 ? 100 : aggressionLevel === 2 ? 110 : 120;
-    this.speedMultiplier = 1.0; // For chaos-based speed modifications
-    this.direction = Math.random() * Math.PI * 2; // Random initial direction
-    this.directionChangeTimer = 0;
-    this.directionChangeInterval = 2; // Change direction every 2 seconds
-    
-    // Behavior states
-    this.state = 'wandering'; // wandering, fleeing, stealing
-    this.target = null; // Target shelf or escape point
-    
-    // Book carrying - scale with aggression
+    this.aggressionLevel = aggressionLevel;
+    this.state = 'wandering';
+    this.target = null;
     this.carriedBook = null;
-    this.bookStealCooldown = 0;
-    this.bookStealCooldownTime = aggressionLevel === 1 ? 4.0 : aggressionLevel === 2 ? 2.5 : 1.5;
-    this.dropBookTimer = 0; // Timer for when to drop carried book
-    this.grabDelay = 0; // Delay before grabbing book from shelf
-    this.grabDelayTime = aggressionLevel === 1 ? 1.0 : aggressionLevel === 2 ? 0.5 : 0.2;
-    this.dropBookMinTime = aggressionLevel === 1 ? 8 : aggressionLevel === 2 ? 5 : 3;
-    this.dropBookMaxTime = aggressionLevel === 1 ? 10 : aggressionLevel === 2 ? 8 : 5;
-    
-    // Skill effects
     this.stunned = false;
-    this.stunTimer = 0;
-    this.silenced = false;
-    this.silenceTimer = 0;
-    this.slowed = false;
-    this.slowTimer = 0;
-    this.slowFactor = 1.0;
+    this.stunEndTime = 0;
+    this.lastLaughTime = 0;
+    this.laughInterval = 5000 + Math.random() * 10000; // 5-15 seconds
+    this.speedMultiplier = 1.0;
     
-    // Detection ranges - increased for better behavior
-    this.shelfDetectionRange = 200; // Increased from 128 for better shelf seeking
-    this.playerDetectionRange = 120; // Increased from 96 for better player detection
+    // Choose sprite type based on aggression level
+    this.spriteType = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
     
-    // Animation
-    this.animationFrame = 0;
-    this.animationTimer = 0;
-    this.facing = 'left'; // Kids face left by default
-    this.isMoving = false;
-    
-    // Sound effects
-    this.hasPlayedLaughSound = false; // Prevent multiple laugh sounds per flee
+    // Only log in development mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[KID SPAWN] Created kid with sprite type: ${this.spriteType}`);
+    }
   }
   
   update(deltaTime) {
-    // Update skill effects
-    this.updateSkillEffects(deltaTime);
+    // Update timers
+    this.lastLaughTime += deltaTime;
     
-    // Update cooldowns
-    if (this.bookStealCooldown > 0) {
-      this.bookStealCooldown -= deltaTime;
-    }
-    
-    // Don't update behavior if stunned
+    // Check if stunned
     if (this.stunned) {
-      return;
+      if (Date.now() > this.stunEndTime) {
+        this.stunned = false;
+      } else {
+        return; // Can't move while stunned
+      }
     }
     
-    // State machine
+    // Update state based on current situation
+    this.updateState();
+    
+    // Update behavior based on state
     switch (this.state) {
       case 'wandering':
         this.updateWandering(deltaTime);
@@ -82,41 +52,11 @@ export class Kid extends Entity {
         break;
     }
     
+    // Apply movement
+    this.applyMovement(deltaTime);
+    
     // Update animation
-    this.isMoving = this.vx !== 0 || this.vy !== 0;
-    if (this.isMoving) {
-      this.animationTimer += deltaTime;
-      if (this.animationTimer >= 0.2) {
-        this.animationFrame = (this.animationFrame + 1) % 2; // Alternate between 2 frames
-        this.animationTimer = 0;
-      }
-    } else {
-      this.animationFrame = 0;
-      this.animationTimer = 0;
-    }
-    
-    // Update facing direction (only left/right for kids)
-    if (Math.abs(this.vx) > 0.1) {
-      this.facing = this.vx > 0 ? 'right' : 'left';
-    }
-    
-    // Update book drop timer if carrying
-    if (this.carriedBook) {
-      this.dropBookTimer += deltaTime;
-      // Drop book after time based on aggression level
-      if (this.dropBookTimer > this.dropBookMinTime + Math.random() * (this.dropBookMaxTime - this.dropBookMinTime)) {
-        this.dropBook();
-        this.dropBookTimer = 0;
-        this.state = 'wandering'; // Go find more books to mess with
-      }
-    }
-    
-    // Keep within world bounds
-    const state = this.game.stateManager.currentState;
-    if (state && state.worldWidth && state.worldHeight) {
-      this.x = Math.max(0, Math.min(state.worldWidth - this.width, this.x));
-      this.y = Math.max(0, Math.min(state.worldHeight - this.height, this.y));
-    }
+    this.updateAnimation(deltaTime);
   }
   
   updateSkillEffects(deltaTime) {
@@ -1098,11 +1038,14 @@ export class Kid extends Entity {
   }
   
   switchToStealing() {
-    // Only switch if not already stealing and not stunned
     if (this.state !== 'stealing' && !this.stunned) {
       this.state = 'stealing';
       this.target = null; // Will be set in updateStealing
-      console.log(`[KID BEHAVIOR] Kid switched to stealing state (aggression: ${this.aggressionLevel})`);
+      
+      // Only log in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[KID BEHAVIOR] Kid switched to stealing state (aggression: ${this.aggressionLevel})`);
+      }
     }
   }
 }
