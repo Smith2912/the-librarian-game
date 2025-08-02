@@ -49,6 +49,9 @@ export class Player extends Entity {
     // Sound effects
     this.outOfBreathSound = null;
     this.isPlayingOutOfBreath = false;
+    
+    // Initialize skill system
+    this.game.skillSystem.initializeSkills(this);
   }
   
   update(deltaTime) {
@@ -159,8 +162,44 @@ export class Player extends Entity {
       this.animationTimer = 0;
     }
     
+    // Handle skill usage
+    this.handleSkillInput(input);
+    
     // Update camera to follow player
     this.game.camera.follow(this);
+  }
+  
+  handleSkillInput(input) {
+    // Get mouse position for skill targeting
+    const mousePos = input.getMousePosition();
+    if (!mousePos) return;
+    
+    // Convert mouse position to world coordinates
+    const worldMouseX = mousePos.x + this.game.camera.getViewportX();
+    const worldMouseY = mousePos.y + this.game.camera.getViewportY();
+    
+    // Skill hotkeys
+    if (input.isKeyPressed('1') || input.isMouseButtonPressed(0)) { // Left click or 1
+      this.useSkill('shushWave', worldMouseX, worldMouseY);
+    }
+    
+    if (input.isKeyPressed('2') || input.isMouseButtonPressed(2)) { // Right click or 2
+      this.useSkill('bookmarkBoomerang', worldMouseX, worldMouseY);
+    }
+    
+    if (input.isKeyPressed('3')) { // 3 key
+      this.useSkill('dustCloud', worldMouseX, worldMouseY);
+    }
+  }
+  
+  useSkill(skillId, targetX, targetY) {
+    // Check if skill is available and player has it
+    if (!this.upgradeLevels[skillId] || this.upgradeLevels[skillId] <= 0) {
+      return false;
+    }
+    
+    // Use the skill through the skill system
+    return this.game.skillSystem.useSkill(skillId, this, targetX, targetY);
   }
   
   render(ctx, interpolation) {

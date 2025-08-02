@@ -6,6 +6,7 @@ export class MenuState extends State {
     super(game);
     this.menuItems = [
       { text: 'Start Game', action: () => this.startGame() },
+      { text: 'Shop', action: () => this.openShop() },
       { text: 'Instructions', action: () => this.showInstructions() }
     ];
     this.selectedIndex = 0;
@@ -322,6 +323,10 @@ export class MenuState extends State {
   
   showInstructions() {
     this.showingInstructions = true;
+  }
+  
+  openShop() {
+    this.game.stateManager.changeState('shop');
   }
   
   playSelectSound() {

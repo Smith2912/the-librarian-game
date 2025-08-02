@@ -66,14 +66,11 @@ export class InputManager {
     // Handle focus loss - be less aggressive about clearing inputs
     let windowHasFocus = true;
     window.addEventListener('blur', (e) => {
-      // Only clear held keys to prevent stuck keys, but keep other state
+      // Clear all input state when window loses focus to prevent stuck keys
       if (document.hasFocus() === false) {
-        console.log('Window lost focus, clearing held keys');
+        console.log('Window lost focus, clearing all input state');
         windowHasFocus = false;
-        // Only clear currently held keys, not all input state
-        this.keys.clear();
-        this.mouse.buttons.clear();
-        // Don't clear frameKeyPresses/frameKeyReleases as they'll be cleared next frame anyway
+        this.clearAllInputs();
       }
     });
     
@@ -107,13 +104,22 @@ export class InputManager {
     }
     
     this.keys.set(event.key, true);
+    
+    // Ensure canvas has focus when any key is pressed
+    this.ensureFocus();
   }
   
   handleKeyUp(event) {
+    // Always mark as released if it was ever pressed
     if (this.keys.has(event.key)) {
       this.frameKeyReleases.add(event.key);
     }
+    
+    // Remove from keys map
     this.keys.delete(event.key);
+    
+    // Also remove from frameKeyPresses to prevent stuck keys
+    this.frameKeyPresses.delete(event.key);
   }
   
   handleMouseDown(event) {
@@ -185,6 +191,9 @@ export class InputManager {
     
     // Reset wheel delta
     this.mouse.wheel = 0;
+    
+    // Ensure canvas has focus for better input handling
+    this.ensureFocus();
   }
   
   // Key state queries

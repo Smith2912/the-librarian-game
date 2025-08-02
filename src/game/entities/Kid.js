@@ -8,6 +8,7 @@ export class Kid extends Entity {
     
     // Randomly select sprite type (1, 2, or 3)
     this.spriteType = Math.floor(Math.random() * 3) + 1;
+    console.log(`[KID SPAWN] Created kid with sprite type: ${this.spriteType}`);
     
     // Movement properties - scale with aggression
     this.speed = aggressionLevel === 1 ? 70 : aggressionLevel === 2 ? 80 : 90;
@@ -30,9 +31,18 @@ export class Kid extends Entity {
     this.dropBookMinTime = aggressionLevel === 1 ? 8 : aggressionLevel === 2 ? 5 : 3;
     this.dropBookMaxTime = aggressionLevel === 1 ? 10 : aggressionLevel === 2 ? 8 : 5;
     
-    // Detection ranges
-    this.shelfDetectionRange = 128; // 4 tiles - increased for better shelf seeking
-    this.playerDetectionRange = 96; // 3 tiles
+    // Skill effects
+    this.stunned = false;
+    this.stunTimer = 0;
+    this.silenced = false;
+    this.silenceTimer = 0;
+    this.slowed = false;
+    this.slowTimer = 0;
+    this.slowFactor = 1.0;
+    
+    // Detection ranges - increased for better behavior
+    this.shelfDetectionRange = 200; // Increased from 128 for better shelf seeking
+    this.playerDetectionRange = 120; // Increased from 96 for better player detection
     
     // Animation
     this.animationFrame = 0;
@@ -45,9 +55,17 @@ export class Kid extends Entity {
   }
   
   update(deltaTime) {
+    // Update skill effects
+    this.updateSkillEffects(deltaTime);
+    
     // Update cooldowns
     if (this.bookStealCooldown > 0) {
       this.bookStealCooldown -= deltaTime;
+    }
+    
+    // Don't update behavior if stunned
+    if (this.stunned) {
+      return;
     }
     
     // State machine
@@ -100,6 +118,36 @@ export class Kid extends Entity {
     }
   }
   
+  updateSkillEffects(deltaTime) {
+    // Update stun effect
+    if (this.stunned) {
+      this.stunTimer -= deltaTime;
+      if (this.stunTimer <= 0) {
+        this.stunned = false;
+        this.stunTimer = 0;
+      }
+    }
+    
+    // Update silence effect
+    if (this.silenced) {
+      this.silenceTimer -= deltaTime;
+      if (this.silenceTimer <= 0) {
+        this.silenced = false;
+        this.silenceTimer = 0;
+      }
+    }
+    
+    // Update slow effect
+    if (this.slowed) {
+      this.slowTimer -= deltaTime;
+      if (this.slowTimer <= 0) {
+        this.slowed = false;
+        this.slowTimer = 0;
+        this.slowFactor = 1.0;
+      }
+    }
+  }
+  
   updateWandering(deltaTime) {
     const state = this.game.stateManager.currentState;
     if (!state) return;
@@ -121,21 +169,25 @@ export class Kid extends Entity {
       }
     }
     
-    // Look for shelves with books to steal (only check nearby shelves)
+    // Look for shelves with books to steal (check ALL shelves, not just nearby)
     if (!this.carriedBook && this.bookStealCooldown <= 0) {
+      let bestShelf = null;
+      let bestDistance = Infinity;
+      
       for (const shelf of shelves) {
-        // Quick bounds check before expensive distance calculation
-        if (Math.abs(shelf.x - this.x) > this.shelfDetectionRange || 
-            Math.abs(shelf.y - this.y) > this.shelfDetectionRange) {
-          continue;
+        if (shelf.books.some(b => b !== null)) {
+          const distToShelf = this.getDistanceTo(shelf);
+          if (distToShelf < bestDistance) {
+            bestDistance = distToShelf;
+            bestShelf = shelf;
+          }
         }
-        
-        const distToShelf = this.getDistanceTo(shelf);
-        if (distToShelf < this.shelfDetectionRange && shelf.books.some(b => b !== null)) {
-          this.target = shelf;
-          this.state = 'stealing';
-          return;
-        }
+      }
+      
+      if (bestShelf) {
+        this.target = bestShelf;
+        this.state = 'stealing';
+        return;
       }
     }
     
@@ -156,35 +208,47 @@ export class Kid extends Entity {
       }
       
       if (nearestShelf) {
-        // Move towards nearest shelf
+        // Move towards nearest shelf with more direct pathing
         const dx = nearestShelf.getCenterX() - this.getCenterX();
         const dy = nearestShelf.getCenterY() - this.getCenterY();
         this.direction = Math.atan2(dy, dx);
+        
+        // Add some randomness to avoid getting stuck in patterns
+        this.direction += (Math.random() - 0.5) * 0.2;
       } else {
-        // No shelves with books, move toward center
+        // No shelves with books, explore more intelligently
         this.directionChangeTimer -= deltaTime;
         if (this.directionChangeTimer <= 0) {
-          const centerX = state.worldWidth / 2;
-          const centerY = state.worldHeight / 2;
-          const dx = centerX - this.getCenterX();
-          const dy = centerY - this.getCenterY();
+          // Instead of always going to center, explore different areas
+          const exploreTargets = [
+            { x: state.worldWidth * 0.25, y: state.worldHeight * 0.25 },
+            { x: state.worldWidth * 0.75, y: state.worldHeight * 0.25 },
+            { x: state.worldWidth * 0.25, y: state.worldHeight * 0.75 },
+            { x: state.worldWidth * 0.75, y: state.worldHeight * 0.75 },
+            { x: state.worldWidth * 0.5, y: state.worldHeight * 0.5 }
+          ];
+          
+          const target = exploreTargets[Math.floor(Math.random() * exploreTargets.length)];
+          const dx = target.x - this.getCenterX();
+          const dy = target.y - this.getCenterY();
           this.direction = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.5;
-          this.directionChangeTimer = 1.0; // Check more frequently
+          this.directionChangeTimer = 2.0 + Math.random() * 2.0; // More varied timing
         }
       }
     } else {
-      // Carrying book - move around to spread chaos
+      // Carrying book - move around to spread chaos more effectively
       this.directionChangeTimer -= deltaTime;
       if (this.directionChangeTimer <= 0) {
-        // Move away from where we picked up the book
+        // Move away from where we picked up the book, but also explore
         if (this.target) {
           const dx = this.getCenterX() - this.target.getCenterX();
           const dy = this.getCenterY() - this.target.getCenterY();
-          this.direction = Math.atan2(dy, dx) + (Math.random() - 0.5) * Math.PI / 2;
+          this.direction = Math.atan2(dy, dx) + (Math.random() - 0.5) * Math.PI;
         } else {
+          // Random exploration when no target
           this.direction = Math.random() * Math.PI * 2;
         }
-        this.directionChangeTimer = 1.5;
+        this.directionChangeTimer = 1.0 + Math.random() * 1.0;
       }
     }
     
@@ -192,22 +256,55 @@ export class Kid extends Entity {
     this.vx = Math.cos(this.direction) * this.speed;
     this.vy = Math.sin(this.direction) * this.speed;
     
-    // When hitting edges, turn toward center where shelves are
+    // Better edge handling - don't force toward center, try to find paths
     if (state.worldWidth && state.worldHeight) {
-      const margin = 10;
+      const margin = 20;
       if (this.x <= margin || this.x >= state.worldWidth - this.width - margin ||
           this.y <= margin || this.y >= state.worldHeight - this.height - margin) {
-        // Turn toward center
-        const centerX = state.worldWidth / 2;
-        const centerY = state.worldHeight / 2;
-        const dx = centerX - this.getCenterX();
-        const dy = centerY - this.getCenterY();
-        this.direction = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.5;
+        
+        // Try to find a clear direction away from the edge
+        const directions = [0, Math.PI/2, Math.PI, -Math.PI/2]; // Right, Down, Left, Up
+        let bestDirection = null;
+        
+        for (const dir of directions) {
+          const testX = this.x + Math.cos(dir) * this.speed * 0.1;
+          const testY = this.y + Math.sin(dir) * this.speed * 0.1;
+          
+          // Check if this direction is clear
+          let isClear = true;
+          for (const shelf of shelves) {
+            if (this.checkCollision(testX, testY, shelf)) {
+              isClear = false;
+              break;
+            }
+          }
+          
+          if (isClear) {
+            bestDirection = dir;
+            break;
+          }
+        }
+        
+        if (bestDirection !== null) {
+          this.direction = bestDirection;
+        } else {
+          // If no clear direction, try toward center as fallback
+          const centerX = state.worldWidth / 2;
+          const centerY = state.worldHeight / 2;
+          const dx = centerX - this.getCenterX();
+          const dy = centerY - this.getCenterY();
+          this.direction = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.5;
+        }
       }
     }
     
     // Apply movement with collision detection
     this.applyMovement(deltaTime);
+    
+    // Debug: Log kid behavior occasionally
+    if (Math.random() < 0.001) { // 0.1% chance per frame
+      console.log(`Kid ${this.aggressionLevel}: ${this.state}, pos: (${Math.round(this.x)}, ${Math.round(this.y)}), target: ${this.target ? 'yes' : 'no'}, carrying: ${this.carriedBook ? 'yes' : 'no'}`);
+    }
   }
   
   updateFleeing(deltaTime) {
@@ -285,20 +382,33 @@ export class Kid extends Entity {
       }
     }
     
-    // Move towards target shelf
+    // Check if target shelf still has books
+    if (!this.target.books.some(b => b !== null)) {
+      this.state = 'wandering';
+      this.target = null;
+      return;
+    }
+    
+    // Move towards target shelf with better pathfinding
     const dx = this.target.getCenterX() - this.getCenterX();
     const dy = this.target.getCenterY() - this.getCenterY();
     const dist = Math.sqrt(dx * dx + dy * dy);
     
-    // Use rectangle-based proximity check instead of center distance
-    if (!this.isNearShelf(this.target, 5)) { // 5 pixels - must be touching
-      // Move towards shelf
-      this.vx = (dx / dist) * this.speed;
-      this.vy = (dy / dist) * this.speed;
+    // Use larger proximity check for better shelf interaction
+    if (!this.isNearShelf(this.target, 15)) { // Increased from 5 to 15 pixels
+      // Move towards shelf with more direct pathing
+      this.direction = Math.atan2(dy, dx);
+      this.vx = Math.cos(this.direction) * this.speed;
+      this.vy = Math.sin(this.direction) * this.speed;
+      
       // Apply movement with collision detection
       this.applyMovement(deltaTime);
     } else {
-      // Near shelf (any side), wait a moment then steal a book
+      // Near shelf, stop moving and prepare to steal
+      this.vx = 0;
+      this.vy = 0;
+      
+      // Wait a moment then steal a book
       if (this.grabDelay <= 0) {
         this.grabDelay = this.grabDelayTime; // Grab delay based on aggression
       }
@@ -308,37 +418,44 @@ export class Kid extends Entity {
       if (this.grabDelay <= 0) {
         const book = this.target.removeRandomBook();
         if (book) {
-        // Book has already been removed from shelf and unshelved
-        // 50/50 chance: knock to floor or carry away
-        if (Math.random() < 0.5) {
-          // Just knock it to the floor
-          // Book is already unshelved by removeRandomBook
-          // Drop book outside of shelf bounds to prevent it landing inside
-          const dropDirection = Math.random() < 0.5 ? -1 : 1; // Left or right
-          book.x = dropDirection < 0 ? 
-            this.target.x - book.width - 10 : // Drop to left of shelf
-            this.target.x + this.target.width + 10; // Drop to right of shelf
-          book.y = this.target.y + this.target.height / 2; // Middle height
-          book.vx = dropDirection * (50 + Math.random() * 50); // Push away from shelf
-          book.vy = Math.random() * 50 + 50;
-          book.visible = true; // Ensure book is visible
-        } else {
-          // Pick it up and carry it
-          this.carriedBook = book;
-          book.isHeld = true;
-          book.holder = this;
-          book.visible = true; // Ensure book is visible
-        }
+          // Book has already been removed from shelf and unshelved
+          // More aggressive kids are more likely to carry books
+          const carryChance = this.aggressionLevel === 1 ? 0.3 : 
+                             this.aggressionLevel === 2 ? 0.5 : 0.7;
+          
+          if (Math.random() < carryChance) {
+            // Pick it up and carry it
+            this.carriedBook = book;
+            book.isHeld = true;
+            book.holder = this;
+            book.visible = true;
+          } else {
+            // Just knock it to the floor
+            const dropDirection = Math.random() < 0.5 ? -1 : 1;
+            book.x = dropDirection < 0 ? 
+              this.target.x - book.width - 10 : 
+              this.target.x + this.target.width + 10;
+            book.y = this.target.y + this.target.height / 2;
+            book.vx = dropDirection * (50 + Math.random() * 50);
+            book.vy = Math.random() * 50 + 50;
+            book.visible = true;
+          }
+          
           this.bookStealCooldown = this.bookStealCooldownTime;
-          // Flee after stealing to create chaos elsewhere
-          this.state = 'fleeing';
+          
+          // More aggressive kids flee longer, less aggressive ones go back to wandering
+          if (this.aggressionLevel >= 2) {
+            this.state = 'fleeing';
+          } else {
+            this.state = 'wandering';
+          }
         } else {
           // No books to steal, go back to wandering
           this.state = 'wandering';
-          this.bookStealCooldown = 1; // Short cooldown before trying again
+          this.bookStealCooldown = 0.5; // Shorter cooldown for more aggressive behavior
         }
         this.target = null;
-        this.grabDelay = 0; // Reset grab delay
+        this.grabDelay = 0;
       }
     }
   }
@@ -383,6 +500,9 @@ export class Kid extends Entity {
           flipX: this.facing === 'right' // Flip when facing right
         }
       );
+      
+      // Draw skill effect overlays
+      this.renderSkillEffects(ctx);
     } else {
       // Fallback rendering with aggression-based colors
       ctx.save();
@@ -546,6 +666,74 @@ export class Kid extends Entity {
     }
   }
   
+  renderSkillEffects(ctx) {
+    const centerX = this.getCenterX();
+    const centerY = this.getCenterY();
+    
+    // Stun effect - spinning stars
+    if (this.stunned) {
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#ffff00';
+      
+      // Draw spinning stars around the kid
+      const starCount = 4;
+      const radius = 25;
+      const time = Date.now() * 0.005;
+      
+      for (let i = 0; i < starCount; i++) {
+        const angle = (i / starCount) * Math.PI * 2 + time;
+        const x = centerX + Math.cos(angle) * radius;
+        const y = centerY + Math.sin(angle) * radius;
+        
+        // Draw star
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      ctx.restore();
+    }
+    
+    // Silence effect - crossed out mouth
+    if (this.silenced) {
+      ctx.save();
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 3;
+      
+      // Draw X over the kid's mouth area
+      const mouthX = centerX;
+      const mouthY = centerY + 10;
+      
+      ctx.beginPath();
+      ctx.moveTo(mouthX - 8, mouthY - 8);
+      ctx.lineTo(mouthX + 8, mouthY + 8);
+      ctx.moveTo(mouthX + 8, mouthY - 8);
+      ctx.lineTo(mouthX - 8, mouthY + 8);
+      ctx.stroke();
+      
+      ctx.restore();
+    }
+    
+    // Slow effect - blue aura
+    if (this.slowed) {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#0088ff';
+      ctx.lineWidth = 2;
+      
+      // Draw pulsing circle
+      const pulseScale = 1 + Math.sin(Date.now() * 0.01) * 0.1;
+      const radius = 20 * pulseScale;
+      
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      ctx.restore();
+    }
+  }
+  
   getDistanceTo(entity) {
     const dx = this.getCenterX() - entity.getCenterX();
     const dy = this.getCenterY() - entity.getCenterY();
@@ -561,6 +749,21 @@ export class Kid extends Entity {
       return;
     }
     
+    // Calculate movement speed based on state and effects
+    let currentSpeed = this.speed;
+    if (this.state === 'fleeing') {
+      currentSpeed = this.fleeSpeed;
+    }
+    
+    // Apply slow effect
+    if (this.slowed) {
+      currentSpeed *= this.slowFactor;
+    }
+    
+    // Recalculate velocity with current speed
+    this.vx = Math.cos(this.direction) * currentSpeed;
+    this.vy = Math.sin(this.direction) * currentSpeed;
+    
     // Calculate new position
     const newX = this.x + this.vx * deltaTime;
     const newY = this.y + this.vy * deltaTime;
@@ -568,7 +771,8 @@ export class Kid extends Entity {
     // Check collisions with shelves (only nearby ones)
     let canMoveX = true;
     let canMoveY = true;
-    const checkRadius = 100; // Only check shelves within this radius
+    let blockedShelves = [];
+    const checkRadius = 150; // Increased radius for better detection
     
     for (const shelf of state.shelves) {
       // Quick bounds check
@@ -580,38 +784,157 @@ export class Kid extends Entity {
       // Check X movement
       if (canMoveX && this.checkCollision(newX, this.y, shelf)) {
         canMoveX = false;
+        blockedShelves.push(shelf);
       }
       // Check Y movement
       if (canMoveY && this.checkCollision(this.x, newY, shelf)) {
         canMoveY = false;
-      }
-      
-      // Early exit if both movements are blocked
-      if (!canMoveX && !canMoveY) {
-        break;
+        blockedShelves.push(shelf);
       }
     }
     
     // Apply movement if no collision
     if (canMoveX) {
       this.x = newX;
-    } else {
-      // Bounce off in opposite direction
-      this.vx = -this.vx * 0.5;
-      if (this.state === 'wandering') {
-        this.direction = Math.PI - this.direction;
-      }
     }
     
     if (canMoveY) {
       this.y = newY;
-    } else {
-      // Bounce off in opposite direction
-      this.vy = -this.vy * 0.5;
-      if (this.state === 'wandering') {
-        this.direction = -this.direction;
+    }
+    
+    // If both movements are blocked, try to find a path around
+    if (!canMoveX && !canMoveY) {
+      this.findPathAroundObstacles(blockedShelves, deltaTime);
+    } else if (!canMoveX || !canMoveY) {
+      // Only one direction blocked, try to slide along the obstacle
+      this.slideAlongObstacle(canMoveX, canMoveY, deltaTime);
+    }
+    
+    // Check if stuck and unstuck if necessary
+    this.checkIfStuck();
+  }
+  
+  findPathAroundObstacles(blockedShelves, deltaTime) {
+    if (blockedShelves.length === 0) return;
+    
+    // Find the closest edge of the nearest obstacle
+    let bestDirection = null;
+    let bestDistance = Infinity;
+    
+    for (const shelf of blockedShelves) {
+      // Check all four sides of the shelf
+      const sides = [
+        { x: shelf.x - this.width, y: this.y, name: 'left' },
+        { x: shelf.x + shelf.width, y: this.y, name: 'right' },
+        { x: this.x, y: shelf.y - this.height, name: 'top' },
+        { x: this.x, y: shelf.y + shelf.height, name: 'bottom' }
+      ];
+      
+      for (const side of sides) {
+        // Check if this path is clear
+        if (!this.checkCollision(side.x, side.y, shelf)) {
+          const distance = Math.sqrt(
+            Math.pow(side.x - this.x, 2) + Math.pow(side.y - this.y, 2)
+          );
+          
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestDirection = Math.atan2(side.y - this.y, side.x - this.x);
+          }
+        }
       }
     }
+    
+    if (bestDirection !== null) {
+      // Move toward the best path
+      this.direction = bestDirection;
+      const speed = this.state === 'fleeing' ? this.fleeSpeed : this.speed;
+      this.vx = Math.cos(this.direction) * speed;
+      this.vy = Math.sin(this.direction) * speed;
+      
+      // Apply movement
+      this.x += this.vx * deltaTime;
+      this.y += this.vy * deltaTime;
+    } else {
+      // No clear path found, try random direction
+      this.direction = Math.random() * Math.PI * 2;
+    }
+  }
+  
+  slideAlongObstacle(canMoveX, canMoveY, deltaTime) {
+    // If we can move in one direction, try to slide along the obstacle
+    if (canMoveX) {
+      // Can move horizontally, try to slide up or down
+      const upY = this.y - this.speed * deltaTime;
+      const downY = this.y + this.speed * deltaTime;
+      
+      // Check if we can move up or down
+      const state = this.game.stateManager.currentState;
+      let canMoveUp = true;
+      let canMoveDown = true;
+      
+      for (const shelf of state.shelves) {
+        if (this.checkCollision(this.x, upY, shelf)) canMoveUp = false;
+        if (this.checkCollision(this.x, downY, shelf)) canMoveDown = false;
+      }
+      
+      if (canMoveUp) {
+        this.y = upY;
+        this.direction = -Math.PI / 2; // Up
+      } else if (canMoveDown) {
+        this.y = downY;
+        this.direction = Math.PI / 2; // Down
+      }
+    } else if (canMoveY) {
+      // Can move vertically, try to slide left or right
+      const leftX = this.x - this.speed * deltaTime;
+      const rightX = this.x + this.speed * deltaTime;
+      
+      // Check if we can move left or right
+      const state = this.game.stateManager.currentState;
+      let canMoveLeft = true;
+      let canMoveRight = true;
+      
+      for (const shelf of state.shelves) {
+        if (this.checkCollision(leftX, this.y, shelf)) canMoveLeft = false;
+        if (this.checkCollision(rightX, this.y, shelf)) canMoveRight = false;
+      }
+      
+      if (canMoveLeft) {
+        this.x = leftX;
+        this.direction = Math.PI; // Left
+      } else if (canMoveRight) {
+        this.x = rightX;
+        this.direction = 0; // Right
+      }
+    }
+  }
+  
+  checkIfStuck() {
+    // Check if kid has been in roughly the same position for too long
+    if (!this.lastPosition) {
+      this.lastPosition = { x: this.x, y: this.y };
+      this.stuckTimer = 0;
+      return;
+    }
+    
+    const distance = Math.sqrt(
+      Math.pow(this.x - this.lastPosition.x, 2) + 
+      Math.pow(this.y - this.lastPosition.y, 2)
+    );
+    
+    if (distance < 5) { // Stuck if moved less than 5 pixels
+      this.stuckTimer += 0.016; // Assuming 60fps
+      
+      if (this.stuckTimer > 2.0) { // Stuck for 2 seconds
+        this.getUnstuck();
+        this.stuckTimer = 0;
+      }
+    } else {
+      this.stuckTimer = 0;
+    }
+    
+    this.lastPosition = { x: this.x, y: this.y };
   }
   
   isNearShelf(shelf, distance) {

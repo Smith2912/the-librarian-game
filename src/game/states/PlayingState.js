@@ -186,6 +186,9 @@ export class PlayingState extends State {
       300  // Middle height of library
     );
     
+    // Apply permanent upgrades
+    this.game.metaProgression.applyPermanentUpgrades(this.player);
+    
     // Set camera bounds to world
     this.game.camera.setBounds(0, 0, this.worldWidth, this.worldHeight);
     
@@ -439,6 +442,9 @@ export class PlayingState extends State {
     ctx.textBaseline = 'middle';
     ctx.fillText(`CHAOS: ${Math.floor(gameData.chaosLevel)}%`, width / 2, meterY + meterHeight / 2);
     
+    // Render skill UI
+    this.renderSkillUI(ctx);
+    
     // Wave increase notification below chaos meter
     if (this.maxKidsIncreaseNotification.active) {
       const notificationY = meterY + meterHeight + 15;
@@ -564,6 +570,88 @@ export class PlayingState extends State {
     }
     
     ctx.restore();
+  }
+  
+  renderSkillUI(ctx) {
+    if (!this.player) return;
+    
+    const { width, height } = this.game;
+    const skillSystem = this.game.skillSystem;
+    
+    // Skill bar at bottom center
+    const skillBarWidth = 400;
+    const skillBarHeight = 60;
+    const skillBarX = width / 2 - skillBarWidth / 2;
+    const skillBarY = height - skillBarHeight - 20;
+    
+    // Skill bar background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(skillBarX, skillBarY, skillBarWidth, skillBarHeight);
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(skillBarX, skillBarY, skillBarWidth, skillBarHeight);
+    
+    // Skill slots
+    const skillSlots = [
+      { id: 'shushWave', key: '1', icon: '🤫' },
+      { id: 'bookmarkBoomerang', key: '2', icon: '📖' },
+      { id: 'dustCloud', key: '3', icon: '💨' }
+    ];
+    
+    const slotWidth = skillBarWidth / 3;
+    
+    skillSlots.forEach((slot, index) => {
+      const slotX = skillBarX + index * slotWidth;
+      const slotY = skillBarY;
+      
+      const skillLevel = this.player.upgradeLevels[slot.id] || 0;
+      const cooldown = skillSystem.getSkillCooldown(slot.id);
+      const canUse = skillLevel > 0 && cooldown <= 0;
+      
+      // Slot background
+      ctx.fillStyle = canUse ? 'rgba(100, 200, 100, 0.3)' : 'rgba(100, 100, 100, 0.3)';
+      ctx.fillRect(slotX + 5, slotY + 5, slotWidth - 10, skillBarHeight - 10);
+      
+      // Slot border
+      ctx.strokeStyle = canUse ? '#00ff00' : '#666';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(slotX + 5, slotY + 5, slotWidth - 10, skillBarHeight - 10);
+      
+      // Skill icon
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = skillLevel > 0 ? '#fff' : '#666';
+      ctx.fillText(slot.icon, slotX + slotWidth / 2, slotY + 25);
+      
+      // Skill level
+      if (skillLevel > 0) {
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`Lv.${skillLevel}`, slotX + slotWidth / 2, slotY + 40);
+      }
+      
+      // Cooldown overlay
+      if (cooldown > 0) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(slotX + 5, slotY + 5, slotWidth - 10, skillBarHeight - 10);
+        
+        // Cooldown text
+        ctx.font = '14px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`${cooldown.toFixed(1)}s`, slotX + slotWidth / 2, slotY + 35);
+      }
+      
+      // Key binding
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(slot.key, slotX + slotWidth / 2, slotY + 55);
+    });
+    
+    // Instructions
+    ctx.font = '14px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.fillText('Use 1-3 keys or mouse buttons to use skills', width / 2, height - 5);
   }
   
   renderChaosVignette(ctx, intensity) {

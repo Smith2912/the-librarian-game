@@ -79,6 +79,16 @@ export class GameOverState extends State {
       booksShelved: gameData.booksShelved || 0,
       kidsRepelled: gameData.kidsRepelled || 0,
     };
+    
+    // Calculate score and add currency
+    const score = this.game.metaProgression.calculateScore(gameData);
+    const currencyEarned = Math.floor(score / 10); // 1 currency per 10 score points
+    
+    this.game.metaProgression.addCurrency(currencyEarned);
+    this.game.metaProgression.addHighScore(score);
+    
+    this.stats.score = score;
+    this.stats.currencyEarned = currencyEarned;
   }
   
   exit() {

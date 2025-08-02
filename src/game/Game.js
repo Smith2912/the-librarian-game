@@ -4,6 +4,9 @@ import { InputManager } from './systems/InputManager.js';
 import { AssetLoader } from './systems/AssetLoader.js';
 import { Camera } from './systems/Camera.js';
 import { Renderer } from './systems/Renderer.js';
+import { SkillSystem } from './systems/SkillSystem.js';
+import { EventSystem } from './systems/EventSystem.js';
+import { MetaProgressionSystem } from './systems/MetaProgressionSystem.js';
 
 export class Game {
   constructor(canvasId) {
@@ -32,6 +35,9 @@ export class Game {
     this.assetLoader = new AssetLoader();
     this.camera = new Camera(this.width, this.height);
     this.renderer = new Renderer(this.ctx, this.camera);
+    this.skillSystem = new SkillSystem(this);
+    this.eventSystem = new EventSystem(this);
+    this.metaProgression = new MetaProgressionSystem(this);
     
     // Debug info
     this.debug = {
@@ -128,6 +134,12 @@ export class Game {
     // Update current state BEFORE clearing input events
     this.stateManager.update(deltaTime);
     
+    // Update skill system
+    this.skillSystem.update(deltaTime);
+    
+    // Update event system
+    this.eventSystem.update(deltaTime);
+    
     // Update camera
     this.camera.update(deltaTime);
     
@@ -141,6 +153,12 @@ export class Game {
     
     // Render current state
     this.stateManager.render(this.renderer, interpolation);
+    
+    // Render skill system effects
+    this.skillSystem.render(this.ctx);
+    
+    // Render event system effects
+    this.eventSystem.render(this.ctx);
     
     // Render debug info
     if (this.debug.showFPS) {

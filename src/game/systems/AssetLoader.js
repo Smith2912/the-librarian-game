@@ -173,7 +173,15 @@ export class AssetLoader {
     // Player sprite
     this.assets.set('librarian', this.createPlaceholderImage(32, 48, '#4169E1', 'P'));
     
-    // Kid sprite
+    // Kid sprites - create 3 different types with different colors
+    this.assets.set('kid1Stand', this.createPlaceholderImage(24, 36, '#FF6347', 'K1')); // Red kid
+    this.assets.set('kid1Walk', this.createPlaceholderImage(24, 36, '#FF6347', 'K1'));
+    this.assets.set('kid2Stand', this.createPlaceholderImage(24, 36, '#32CD32', 'K2')); // Green kid
+    this.assets.set('kid2Walk', this.createPlaceholderImage(24, 36, '#32CD32', 'K2'));
+    this.assets.set('kid3Stand', this.createPlaceholderImage(24, 36, '#4169E1', 'K3')); // Blue kid
+    this.assets.set('kid3Walk', this.createPlaceholderImage(24, 36, '#4169E1', 'K3'));
+    
+    // Generic fallback kid sprite
     this.assets.set('kid', this.createPlaceholderImage(24, 36, '#FF6347', 'K'));
     
     // Book sprite
@@ -185,6 +193,6 @@ export class AssetLoader {
     // Floor tiles
     this.assets.set('tiles', this.createPlaceholderImage(32, 32, '#D2691E'));
     
-    console.log('Generated placeholder assets');
+    console.log('Generated placeholder assets with 3 kid types');
   }
 }

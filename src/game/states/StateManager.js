@@ -3,6 +3,7 @@ import { PlayingState } from './PlayingState.js';
 import { PausedState } from './PausedState.js';
 import { GameOverState } from './GameOverState.js';
 import { UpgradeSelectionState } from './UpgradeSelectionState.js';
+import { ShopState } from './ShopState.js';
 
 export class StateManager {
   constructor(game) {
@@ -20,6 +21,7 @@ export class StateManager {
     this.registerState('paused', new PausedState(this.game));
     this.registerState('gameover', new GameOverState(this.game));
     this.registerState('upgradeSelection', new UpgradeSelectionState(this.game));
+    this.registerState('shop', new ShopState(this.game));
     
     // Initialize all states
     for (const state of this.states.values()) {
