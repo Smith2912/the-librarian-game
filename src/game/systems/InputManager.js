@@ -103,7 +103,8 @@ export class InputManager {
       console.log('New key press:', event.key);
     }
     
-    this.keys.set(event.key, true);
+    // Store key with timestamp
+    this.keys.set(event.key, Date.now());
     
     // Ensure canvas has focus when any key is pressed
     this.ensureFocus();
@@ -120,6 +121,9 @@ export class InputManager {
     
     // Also remove from frameKeyPresses to prevent stuck keys
     this.frameKeyPresses.delete(event.key);
+    
+    // Ensure canvas maintains focus
+    this.ensureFocus();
   }
   
   handleMouseDown(event) {
@@ -194,6 +198,17 @@ export class InputManager {
     
     // Ensure canvas has focus for better input handling
     this.ensureFocus();
+    
+    // Additional check for stuck keys - if a key has been held for too long without updates
+    // This helps prevent keys from getting stuck due to focus issues
+    const currentTime = Date.now();
+    for (const [key, timestamp] of this.keys.entries()) {
+      if (typeof timestamp === 'number' && currentTime - timestamp > 5000) {
+        // Key has been held for more than 5 seconds, likely stuck
+        console.log(`Clearing potentially stuck key: ${key}`);
+        this.keys.delete(key);
+      }
+    }
   }
   
   // Key state queries
@@ -202,29 +217,22 @@ export class InputManager {
   }
   
   isKeyPressed(key) {
-    // Check if this key was pressed this frame
-    const pressed = this.frameKeyPresses.has(key);
-    
-    if (pressed && (key === 'ArrowUp' || key === 'ArrowDown' || key === 'Enter')) {
-      console.log(`isKeyPressed(${key}): PRESSED!`);
-    }
-    
-    return pressed;
+    return this.frameKeyPresses.has(key);
   }
   
   isKeyReleased(key) {
-    return !this.isKeyDown(key) && this.previousKeys.has(key);
+    return this.frameKeyReleases.has(key);
   }
   
   // Action queries (support multiple key mappings)
   isActionDown(action) {
-    const keys = this.actionMappings.get(action);
-    return keys ? keys.some(key => this.isKeyDown(key)) : false;
+    const keys = this.actionMappings.get(action) || [];
+    return keys.some(key => this.isKeyDown(key));
   }
   
   isActionPressed(action) {
-    const keys = this.actionMappings.get(action);
-    return keys ? keys.some(key => this.isKeyPressed(key)) : false;
+    const keys = this.actionMappings.get(action) || [];
+    return keys.some(key => this.isKeyPressed(key));
   }
   
   // Mouse queries
@@ -273,12 +281,15 @@ export class InputManager {
   }
   
   clearAllInputs() {
+    console.log('Clearing all input state');
     this.keys.clear();
     this.previousKeys.clear();
     this.frameKeyPresses.clear();
     this.frameKeyReleases.clear();
     this.mouse.buttons.clear();
+    this.mouse.previousButtons.clear();
     this.touches.clear();
+    this.mouse.wheel = 0;
   }
   
   // Safely clear just the frame events (for state transitions)
