@@ -1,37 +1,55 @@
+// Library Survivors Game - Main Entry Point
+// This is a legitimate HTML5 game application
+
 import { Game } from './game/Game.js';
 
-// Wait for DOM to load
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('DOM loaded, initializing game...');
-  
-  // Create game instance
-  const game = new Game('game-canvas');
-  
-  // Remove global exposure for security - only expose in development
-  if (process.env.NODE_ENV === 'development') {
-    window.game = game;
-  }
+// Initialize game when DOM is ready
+function initializeGame() {
+  console.log('Initializing Library Survivors game...');
   
   try {
-    // Initialize and start the game
-    await game.init();
-    console.log('Library Survivors initialized successfully!');
-    console.log('Current state:', game.stateManager.currentState?.name);
-  } catch (error) {
-    console.error('Failed to initialize game:', error);
+    // Create game instance
+    const gameInstance = new Game('game-canvas');
     
-    // Show error to user
-    const loadingEl = document.getElementById('loading');
-    if (loadingEl) {
-      loadingEl.textContent = 'Failed to load game. Please refresh the page.';
-      loadingEl.style.color = '#ff0000';
+    // Development mode debugging
+    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
+      window.gameInstance = gameInstance;
     }
+    
+    // Start the game
+    gameInstance.init().then(() => {
+      console.log('Library Survivors game started successfully');
+      
+      // Handle page visibility changes
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden && gameInstance.stateManager.currentState?.name === 'playing') {
+          gameInstance.gameData.isPaused = true;
+        }
+      });
+    }).catch((error) => {
+      console.error('Game initialization failed:', error);
+      showErrorMessage('Game failed to start. Please refresh the page.');
+    });
+    
+  } catch (error) {
+    console.error('Failed to create game instance:', error);
+    showErrorMessage('Unable to create game. Please check your browser settings.');
   }
-  
-  // Handle visibility changes (pause when tab is hidden)
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && game.stateManager.currentState?.name === 'playing') {
-      game.gameData.isPaused = true;
-    }
-  });
-});
+}
+
+// Show error message to user
+function showErrorMessage(message) {
+  const loadingElement = document.getElementById('loading');
+  if (loadingElement) {
+    loadingElement.textContent = message;
+    loadingElement.style.color = '#ff0000';
+  }
+}
+
+// Wait for DOM to be fully loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeGame);
+} else {
+  // DOM is already loaded
+  initializeGame();
+}

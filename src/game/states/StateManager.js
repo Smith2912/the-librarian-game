@@ -49,9 +49,6 @@ export class StateManager {
       this.currentState.exit();
     }
     
-    // Clear any lingering input events
-    this.game.inputManager.clearFrameEvents();
-    
     // Store previous state
     this.previousState = this.currentState;
     
@@ -119,9 +116,6 @@ export class StateManager {
     if (this.currentState && this.currentState.exit) {
       this.currentState.exit();
     }
-    
-    // Clear any lingering input events
-    this.game.inputManager.clearFrameEvents();
     
     // Pop previous state from stack
     this.currentState = this.stateStack.pop();

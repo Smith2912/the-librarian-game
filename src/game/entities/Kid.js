@@ -4,6 +4,9 @@ export class Kid extends Entity {
   constructor(game, x, y, aggressionLevel = 1) {
     super(x, y, 24, 36);
     
+    // Store game reference for access to systems
+    this.game = game;
+    
     this.aggressionLevel = aggressionLevel;
     this.state = 'wandering';
     this.target = null;
@@ -17,10 +20,45 @@ export class Kid extends Entity {
     // Choose sprite type based on aggression level
     this.spriteType = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
     
-    // Only log in development mode
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[KID SPAWN] Created kid with sprite type: ${this.spriteType}`);
-    }
+    // Movement properties
+    this.speed = 50 + (aggressionLevel - 1) * 20; // Base speed + aggression bonus
+    this.fleeSpeed = this.speed * 1.5; // Faster when fleeing
+    this.playerDetectionRange = 80; // Distance to detect player
+    this.direction = Math.random() * Math.PI * 2; // Random initial direction
+    this.vx = 0;
+    this.vy = 0;
+    this.directionChangeTimer = 2.0 + Math.random() * 2.0;
+    
+    // Book stealing properties
+    this.bookStealCooldown = 0;
+    this.bookStealCooldownTime = 3.0 - (aggressionLevel - 1) * 0.5; // More aggressive = shorter cooldown
+    this.grabDelay = 0;
+    this.grabDelayTime = 1.0 - (aggressionLevel - 1) * 0.2; // More aggressive = faster grabbing
+    
+    // Fleeing properties
+    this.fleeTimer = null;
+    this.hasPlayedLaughSound = false;
+    this.dropBookTimer = 0;
+    
+    // Skill effect properties
+    this.stunTimer = 0;
+    this.silenceTimer = 0;
+    this.slowTimer = 0;
+    this.slowFactor = 1.0;
+    this.silenced = false;
+    this.slowed = false;
+    
+    // Animation properties
+    this.facing = 'left'; // Default facing direction
+    this.isMoving = false;
+    this.animationFrame = 0;
+    this.animationTimer = 0;
+    
+    // Stuck detection properties
+    this.lastPosition = null;
+    this.stuckTimer = 0;
+    
+    // Spawn logging removed to prevent console spam
   }
   
   update(deltaTime) {
@@ -36,8 +74,8 @@ export class Kid extends Entity {
       }
     }
     
-    // Update state based on current situation
-    this.updateState();
+    // Update skill effects
+    this.updateSkillEffects(deltaTime);
     
     // Update behavior based on state
     switch (this.state) {
@@ -86,6 +124,32 @@ export class Kid extends Entity {
         this.slowTimer = 0;
         this.slowFactor = 1.0;
       }
+    }
+  }
+  
+  updateAnimation(deltaTime) {
+    // Update animation timer
+    this.animationTimer += deltaTime;
+    
+    // Determine if kid is moving
+    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    this.isMoving = speed > 5; // Threshold for movement
+    
+    // Update facing direction based on movement
+    if (this.isMoving) {
+      if (this.vx > 0) {
+        this.facing = 'right';
+      } else if (this.vx < 0) {
+        this.facing = 'left';
+      }
+    }
+    
+    // Simple animation frame switching for walking
+    if (this.isMoving && this.animationTimer > 0.2) { // Switch every 0.2 seconds
+      this.animationFrame = this.animationFrame === 0 ? 1 : 0;
+      this.animationTimer = 0;
+    } else if (!this.isMoving) {
+      this.animationFrame = 0; // Standing frame when not moving
     }
   }
   
@@ -258,10 +322,7 @@ export class Kid extends Entity {
     // Apply movement with collision detection
     this.applyMovement(deltaTime);
     
-    // Debug: Log kid behavior occasionally
-    if (Math.random() < 0.001) { // 0.1% chance per frame
-      console.log(`Kid ${this.aggressionLevel}: ${this.state}, pos: (${Math.round(this.x)}, ${Math.round(this.y)}), target: ${this.target ? 'yes' : 'no'}, carrying: ${this.carriedBook ? 'yes' : 'no'}`);
-    }
+    // Debug logging removed to prevent console spam
   }
   
   updateFleeing(deltaTime) {
@@ -1032,7 +1093,9 @@ export class Kid extends Entity {
       const randomSound = laughSounds[Math.floor(Math.random() * laughSounds.length)];
       const audio = new Audio(`/${randomSound}.mp3`);
       audio.volume = 0.4;
-      audio.play().catch(e => console.log('Laugh sound play failed:', e));
+      audio.play().catch(e => {
+        // Audio error silently ignored to prevent console spam
+      });
       this.hasPlayedLaughSound = true;
     }
   }
@@ -1042,10 +1105,7 @@ export class Kid extends Entity {
       this.state = 'stealing';
       this.target = null; // Will be set in updateStealing
       
-      // Only log in development mode
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`[KID BEHAVIOR] Kid switched to stealing state (aggression: ${this.aggressionLevel})`);
-      }
+      // Behavior logging removed to prevent console spam
     }
   }
 }

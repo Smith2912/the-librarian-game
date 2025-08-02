@@ -194,6 +194,91 @@ export class SecurityUtils {
     
     return true;
   }
+
+  /**
+   * Sanitize object data
+   */
+  static sanitizeObject(obj) {
+    if (!obj || typeof obj !== 'object') return {};
+    
+    // For simple objects, return as-is but validate structure
+    if (Array.isArray(obj)) return this.sanitizeArray(obj);
+    
+    const sanitized = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof key === 'string' && key.length <= SecurityConfig.MAX_LENGTHS.TEXT) {
+        if (typeof value === 'number') {
+          sanitized[key] = this.sanitizeNumber(value);
+        } else if (typeof value === 'string') {
+          sanitized[key] = this.sanitizeText(value);
+        } else if (typeof value === 'boolean') {
+          sanitized[key] = Boolean(value);
+        } else if (Array.isArray(value)) {
+          sanitized[key] = this.sanitizeArray(value);
+        } else if (typeof value === 'object' && value !== null) {
+          sanitized[key] = this.sanitizeObject(value);
+        }
+      }
+    }
+    
+    return sanitized;
+  }
+
+  /**
+   * Sanitize array data
+   */
+  static sanitizeArray(arr) {
+    if (!Array.isArray(arr)) return [];
+    
+    const sanitized = [];
+    for (let i = 0; i < arr.length && i < 1000; i++) { // Limit array size
+      const item = arr[i];
+      if (typeof item === 'number') {
+        sanitized.push(this.sanitizeNumber(item));
+      } else if (typeof item === 'string') {
+        sanitized.push(this.sanitizeText(item));
+      } else if (typeof item === 'boolean') {
+        sanitized.push(Boolean(item));
+      } else if (Array.isArray(item)) {
+        sanitized.push(this.sanitizeArray(item));
+      } else if (typeof item === 'object' && item !== null) {
+        sanitized.push(this.sanitizeObject(item));
+      }
+    }
+    
+    return sanitized;
+  }
+
+  /**
+   * Sanitize string data
+   */
+  static sanitizeString(str, maxLength = SecurityConfig.MAX_LENGTHS.TEXT) {
+    if (typeof str !== 'string') return '';
+    return this.sanitizeText(str, maxLength);
+  }
+
+  /**
+   * Sanitize high scores array
+   */
+  static sanitizeHighScores(scores) {
+    if (!Array.isArray(scores)) return [];
+    
+    const sanitized = [];
+    for (let i = 0; i < scores.length && i < 100; i++) { // Limit to 100 high scores
+      const score = scores[i];
+      if (score && typeof score === 'object') {
+        const sanitizedScore = {
+          score: this.sanitizeNumber(score.score, 0, SecurityConfig.MAX_VALUES.SCORE),
+          time: this.sanitizeNumber(score.time, 0, SecurityConfig.MAX_VALUES.TIME),
+          date: this.sanitizeText(score.date, SecurityConfig.MAX_LENGTHS.TEXT),
+          booksCollected: this.sanitizeNumber(score.booksCollected, 0, SecurityConfig.MAX_VALUES.SCORE)
+        };
+        sanitized.push(sanitizedScore);
+      }
+    }
+    
+    return sanitized;
+  }
 }
 
 // Export security configuration

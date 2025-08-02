@@ -2,7 +2,32 @@ export class InputManager {
   constructor(canvas) {
     this.canvas = canvas;
     this.keys = new Map();
+    this.frameKeyPresses = new Set();
     this.frameKeyReleases = new Set();
+    
+    // Mouse state
+    this.mouse = {
+      x: 0,
+      y: 0,
+      buttons: new Map(),
+      previousButtons: new Set(),
+      wheel: 0
+    };
+    
+    // Touch state
+    this.touches = new Map();
+    
+    // Action mappings
+    this.actionMappings = new Map([
+      ['moveLeft', ['a', 'A', 'ArrowLeft']],
+      ['moveRight', ['d', 'D', 'ArrowRight']],
+      ['moveUp', ['w', 'W', 'ArrowUp']],
+      ['moveDown', ['s', 'S', 'ArrowDown']],
+      ['sprint', ['Shift']],
+      ['pause', ['p', 'P', 'Escape']],
+      ['interact', [' ', 'Enter']]
+    ]);
+    
     this.mouseX = 0;
     this.mouseY = 0;
     this.mouseDown = false;
@@ -80,6 +105,11 @@ export class InputManager {
       console.log('New key press:', key);
     }
     
+    // Only add to frame presses if not already pressed
+    if (!this.keys.has(key)) {
+      this.frameKeyPresses.add(key);
+    }
+    
     this.keys.set(key, Date.now());
   }
   
@@ -154,7 +184,16 @@ export class InputManager {
   
   update() {
     // Clear frame-specific data
+    this.frameKeyPresses.clear();
     this.frameKeyReleases.clear();
+    
+    // Update mouse previous buttons
+    this.mouse.previousButtons.clear();
+    for (const [button, pressed] of this.mouse.buttons.entries()) {
+      if (pressed) {
+        this.mouse.previousButtons.add(button);
+      }
+    }
     
     // Check for stuck keys and clear them
     const currentTime = Date.now();
@@ -259,7 +298,12 @@ export class InputManager {
     }
     
     this.keys.clear();
+    this.frameKeyPresses.clear();
     this.frameKeyReleases.clear();
+    this.mouse.buttons.clear();
+    this.mouse.previousButtons.clear();
+    this.mouse.wheel = 0;
+    this.touches.clear();
     this.mouseDown = false;
     this.touchActive = false;
   }

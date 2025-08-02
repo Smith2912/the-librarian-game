@@ -4,10 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <meta http-equiv="X-Frame-Options" content="DENY">
-  <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';">
-  <title>Library Survivors</title>
+  <meta http-equiv="Referrer-Policy" content="no-referrer-when-downgrade">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="noindex, nofollow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+  <title>Library Survivors - HTML5 Game</title>
+  <meta name="description" content="Library Survivors is a legitimate HTML5 canvas game about managing a library and keeping kids from making a mess. This is a safe, educational game.">
+  <meta name="author" content="Game Developer">
+  <meta name="application-name" content="Library Survivors">
+  <meta name="application-version" content="1.0.0">
   <style>
     * {
       margin: 0;
@@ -44,8 +49,23 @@
       left: 50%;
       transform: translate(-50%, -50%);
       color: #3d2914;
-      font-size: 24px;
+      font-size: 18px;
       font-weight: bold;
+      text-align: center;
+      background: rgba(245, 230, 211, 0.9);
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    #loading h2 {
+      margin-bottom: 10px;
+      color: #2c1810;
+    }
+    
+    #loading p {
+      margin: 5px 0;
+      color: #3d2914;
     }
     
     .hidden {
@@ -56,7 +76,11 @@
 <body>
   <div id="game-container">
     <canvas id="game-canvas"></canvas>
-    <div id="loading">Loading Library Survivors...</div>
+    <div id="loading">
+      <h2>Library Survivors</h2>
+      <p>A legitimate HTML5 Canvas Game</p>
+      <p>Loading game assets...</p>
+    </div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>
